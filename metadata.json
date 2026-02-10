@@ -1,0 +1,7 @@
+{
+  "name": "Copy of QuickStore - Market Validator E-commerce",
+  "description": "A lean, scalable e-commerce platform designed for product testing and rapid market validation with automated customer communication and a full admin dashboard.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
