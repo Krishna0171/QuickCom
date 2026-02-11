@@ -19,7 +19,7 @@ import { DatabaseSetup } from './components/DatabaseSetup';
 import { Product, CartItem, User, Order, Address, PaymentMethod } from './types';
 import { api } from './services/api';
 import { automation } from './services/automation';
-import { CheckCircle, X, AlertTriangle, Package, Smartphone, Lock, Mail } from 'lucide-react';
+import { CheckCircle, X, AlertTriangle, Package, Smartphone, Lock, Mail, Database, Terminal, ShieldCheck } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<string>('home');
@@ -33,8 +33,8 @@ const App: React.FC = () => {
   const [loadingMessage, setLoadingMessage] = useState('Initializing QuickStore...');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [dbStatus, setDbStatus] = useState({ ready: false, needsSetup: false });
+  const [configMissing, setConfigMissing] = useState<null | ReturnType<typeof api.getConfigStatus>>(null);
 
-  // Confirmation Modals State
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -51,10 +51,18 @@ const App: React.FC = () => {
 
   const [checkoutAddress, setCheckoutAddress] = useState<Address>({ street: '', city: '', state: '', pincode: '' });
   const [redirectAfterLogin, setRedirectAfterLogin] = useState<string | null>(null);
-  const [authErrors, setAuthErrors] = useState<{mobile?: string, password?: string, email?: string}>({});
 
   useEffect(() => {
     const init = async () => {
+      // Step 1: Check if environment variables are even present
+      const config = api.getConfigStatus();
+      if (!config.api_key || !config.supabase_url || !config.supabase_anon_key) {
+        setConfigMissing(config);
+        setIsGlobalLoading(false);
+        return;
+      }
+
+      // Step 2: Initialize DB structure
       const result = await api.initializeDatabase();
       setDbStatus({ ready: result.success, needsSetup: api.needsSetup });
       
@@ -196,11 +204,7 @@ const App: React.FC = () => {
     const mobile = formData.get('mobile') as string;
     const password = formData.get('password') as string;
     const email = formData.get('email') as string;
-    const errors: any = {};
-    if (!/^\d{10}$/.test(mobile)) errors.mobile = '10-digit mobile required';
-    if (password.length < 6) errors.password = 'Min 6 chars';
-    if (Object.keys(errors).length > 0) { setAuthErrors(errors); return; }
-    setAuthErrors({});
+    
     setIsGlobalLoading(true);
     setLoadingMessage('Authenticating...');
     try {
@@ -231,6 +235,53 @@ const App: React.FC = () => {
     if (page !== 'order-details') setSelectedOrderId(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  if (configMissing) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl p-8 sm:p-10 animate-in zoom-in duration-300">
+          <div className="flex justify-center mb-6">
+            <div className="p-4 bg-indigo-50 rounded-3xl">
+              <Terminal className="h-10 w-10 text-indigo-600" />
+            </div>
+          </div>
+          <h1 className="text-2xl font-extrabold text-slate-900 text-center mb-2">Configuration Required</h1>
+          <p className="text-slate-500 text-center text-sm mb-8">QuickStore needs environment variables to connect to your database and AI services.</p>
+          
+          <div className="space-y-4 mb-8">
+            {[
+              { key: 'API_KEY', status: configMissing.api_key, label: 'Gemini AI Key' },
+              { key: 'SUPABASE_URL', status: configMissing.supabase_url, label: 'Supabase Project URL' },
+              { key: 'SUPABASE_ANON_KEY', status: configMissing.supabase_anon_key, label: 'Supabase Anon Key' }
+            ].map(item => (
+              <div key={item.key} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{item.key}</p>
+                  <p className="text-sm font-bold text-slate-700">{item.label}</p>
+                </div>
+                {item.status ? (
+                  <CheckCircle className="h-5 w-5 text-emerald-500" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 mb-8 flex items-start space-x-3">
+            <ShieldCheck className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800 leading-relaxed">
+              Ensure you have a <b>.env</b> file in your project root or set these variables in your hosting provider's dashboard.
+            </p>
+          </div>
+
+          <button onClick={() => window.location.reload()} className="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">
+            Refresh App
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (dbStatus.needsSetup) {
     return <DatabaseSetup onComplete={() => setDbStatus({ ready: true, needsSetup: false })} />;
